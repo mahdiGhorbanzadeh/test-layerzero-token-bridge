@@ -17,6 +17,5 @@ remappings = [
 [rpc_endpoints]
 mainnet = "${RPC_URL}"
 sepolia = "${RPC_URL_TEST}"
-
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
-
+amoy = "${RPC_URL_AMOY}"
+base = "${RPC_URL_BASE_SEPOLIA}"

@@ -7,7 +7,7 @@ import { MyOFTTest } from "../src/MyOFTTest.sol";
 contract MyOFTTestDeploy is Script {
     function run() external {
         // Replace these env vars with your own values
-        address endpoint = vm.envAddress("ENDPOINT_ADDRESS");
+        address endpoint = vm.envAddress("ENDPOINT_BASE_ADDRESS");
         address owner    = vm.envAddress("OWNER_ADDRESS");
 
         vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
