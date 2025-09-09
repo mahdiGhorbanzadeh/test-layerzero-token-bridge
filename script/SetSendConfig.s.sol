@@ -16,8 +16,9 @@ contract SetSendConfig is Script {
     function _createRequiredDVNs() private pure returns (address[] memory) {
         address[] memory dvns = new address[](2);
         // DVN addresses must be sorted in ascending order
-        dvns[0] = 0x3Ed2211f49ce343D70CB8dEd927cA6C4a6198101; // Smaller address first
-        dvns[1] = 0x55c175DD5b039331dB251424538169D8495C18d1; // Larger address second
+        dvns[0] = 0xdf04ABb599c7B37dD5FfC0f8E94f6898120874eF; // Smaller address first
+        dvns[1] = 0xe1a12515F9AB2764b887bF60B923Ca494EBbB2d6; // Larger address second
+        
         return dvns;
     }
 
@@ -40,7 +41,7 @@ contract SetSendConfig is Script {
         /// @notice ExecutorConfig sets message size limit + fee‑paying executor for A → B
         ExecutorConfig memory exec = ExecutorConfig({
             maxMessageSize: 10000,                                       // max bytes per cross-chain message
-            executor: 0x4Cf1B3Fa61465c2c907f82fC488B43223BA0CF93                           // address that pays destination execution fees on B
+            executor: 0x8A3D588D9f6AC041476b094f97FF94ec30169d3D                           // address that pays destination execution fees on B
         });
 
         bytes memory encodedUln  = abi.encode(uln);
