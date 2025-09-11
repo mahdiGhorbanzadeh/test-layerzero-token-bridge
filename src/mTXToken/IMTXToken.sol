@@ -13,12 +13,16 @@ import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.so
 interface IMTXToken is IERC20, IERC20Burnable, IAccessControl {
     // Events
     event Blacklisted(address indexed account, bool isBlacklisted);
+    event Whitelisted(address indexed account, bool isWhitelisted);
     event ChecksToggled(bool enabled);
     
     function blacklisted(address account) external view returns (bool);
+    function whitelisted(address account) external view returns (bool);
     
     function addToBlacklist(address account) external;
     function removeFromBlacklist(address account) external;
+    function addToWhitelist(address account) external;
+    function removeFromWhitelist(address account) external;
     
     function checksEnabled() external view returns (bool);
     
