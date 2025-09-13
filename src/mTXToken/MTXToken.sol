@@ -3,13 +3,14 @@
 pragma solidity ^0.8.22;
 
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
 import { ERC20Burnable } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import { ERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import { OFT } from "@layerzerolabs/oft-evm/contracts/OFT.sol";
 import { IMTXToken } from "./IMTXToken.sol";
 
 /// @notice OFT is an ERC-20 token that extends the OFTCore contract.
-contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
+contract MTXToken is OFT, AccessControl, ERC20Burnable, ERC20Permit, Pausable, IMTXToken {
     // Define roles
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
@@ -25,8 +26,6 @@ contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
     // Whitelist mapping - whitelisted addresses bypass all checks
     mapping(address => bool) public whitelisted;
     
-    // Control state for all checks (blacklist, transfer limits, wallet balance limits)
-    bool public checksEnabled = true;
     
     // Rate limiting control flags
     bool public checkWindowSize = true;
@@ -36,6 +35,9 @@ contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
     bool public checkBlackList = true;
     bool public checkMaxTransfer = true;
     bool public checkMaxWalletBalance = true;
+    
+    // Control flag for all checks (can only be disabled once by admin)
+    bool public restrictionsEnabled = true;
     
     // Rate limiting constants
     uint256 private constant MAX_TXS_PER_WINDOW = 3; // Max transactions per 15 minutes
@@ -58,7 +60,15 @@ contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
      * @notice Modifier to restrict access to manager role
      */
     modifier onlyManager() {
-        require(hasRole(MANAGER_ROLE, _msgSender()), "MTXToken: caller is not a manager");
+        require(hasRole(MANAGER_ROLE, _msgSender()), "MTXToken: caller is not a data manager");
+        _;
+    }
+
+    /**
+     * @notice Modifier to restrict access to admin role
+     */
+    modifier onlyAdmin() {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "MTXToken: caller is not an admin");
         _;
     }
 
@@ -66,7 +76,7 @@ contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
         address _lzEndpoint,
         address _owner,
         address _admin
-    ) OFT("mtx-token","MTX", _lzEndpoint, _admin) Ownable(_owner) {
+    ) OFT("mtx-token","MTX", _lzEndpoint, _admin) ERC20Permit("mtx-token") {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);  
         _mint(_admin, 10_000_000_000 * 10**decimals());
     }
@@ -107,19 +117,10 @@ contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
     }
 
     /**
-     * @notice Enable or disable all checks (blacklist, transfer limits, wallet balance limits)
-     * @param enabled True to enable all checks, false to disable all checks
-     */
-    function setChecksEnabled(bool enabled) external onlyAdmin {
-        checksEnabled = enabled;
-        emit ChecksToggled(enabled);
-    }
-
-    /**
      * @notice Enable or disable window size check
      * @param enabled True to enable window size check, false to disable
      */
-    function setCheckWindowSize(bool enabled) external onlyAdmin {
+    function setCheckWindowSize(bool enabled) external onlyManager {
         checkWindowSize = enabled;
     }
 
@@ -127,7 +128,7 @@ contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
      * @notice Enable or disable transaction interval check
      * @param enabled True to enable interval check, false to disable
      */
-    function setCheckTxInterval(bool enabled) external onlyAdmin {
+    function setCheckTxInterval(bool enabled) external onlyManager {
         checkTxInterval = enabled;
     }
 
@@ -135,7 +136,7 @@ contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
      * @notice Enable or disable block transaction limit check
      * @param enabled True to enable block limit check, false to disable
      */
-    function setCheckBlockTxLimit(bool enabled) external onlyAdmin {
+    function setCheckBlockTxLimit(bool enabled) external onlyManager {
         checkBlockTxLimit = enabled;
     }
 
@@ -143,7 +144,7 @@ contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
      * @notice Enable or disable window transaction limit check
      * @param enabled True to enable window limit check, false to disable
      */
-    function setCheckWindowTxLimit(bool enabled) external onlyAdmin {
+    function setCheckWindowTxLimit(bool enabled) external onlyManager {
         checkWindowTxLimit = enabled;
     }
 
@@ -151,7 +152,7 @@ contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
      * @notice Enable or disable blacklist check
      * @param enabled True to enable blacklist check, false to disable
      */
-    function setCheckBlackList(bool enabled) external onlyAdmin {
+    function setCheckBlackList(bool enabled) external onlyManager {
         checkBlackList = enabled;
     }
 
@@ -159,7 +160,7 @@ contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
      * @notice Enable or disable maximum transfer amount check
      * @param enabled True to enable max transfer check, false to disable
      */
-    function setCheckMaxTransfer(bool enabled) external onlyAdmin {
+    function setCheckMaxTransfer(bool enabled) external onlyManager {
         checkMaxTransfer = enabled;
     }
 
@@ -167,8 +168,32 @@ contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
      * @notice Enable or disable maximum wallet balance check
      * @param enabled True to enable max wallet balance check, false to disable
      */
-    function setCheckMaxWalletBalance(bool enabled) external onlyAdmin {
+    function setCheckMaxWalletBalance(bool enabled) external onlyManager {
         checkMaxWalletBalance = enabled;
+    }
+
+    /**
+     * @notice Pause all token transfers
+     */
+    function pause() external onlyManager {
+        _pause();
+    }
+
+    /**
+     * @notice Unpause all token transfers
+     */
+    function unpause() external onlyManager {
+        _unpause();
+    }
+
+    /**
+     * @notice Permanently disable all restrictions (one-time only, admin only)
+     * This function can only be called once and makes the token fully unrestricted
+     */
+    function disableRestrictions() external onlyAdmin {
+        require(restrictionsEnabled, "already disabled");
+        restrictionsEnabled = false;
+        emit RestrictionsDisabled();
     }
 
     /**
@@ -220,30 +245,32 @@ contract MTXToken is OFT, AccessControl, ERC20Burnable, IMTXToken {
      * @notice Override transfer to check blacklist and wallet limits
      */
     function _update(address from, address to, uint256 value) internal override {        
-        // Only perform checks if checksEnabled is true
-        if (checksEnabled && from != address(0) && to != address(0)) {
+        // Only perform checks if restrictionsEnabled is true
+        if (restrictionsEnabled) {
+            // Check if contract is paused
+            require(!paused(), "Pausable: paused");
 
-            if(!whitelisted[to]){
-                if (checkMaxWalletBalance) { // Not a mint operation
-                    require(balanceOf(to) + value <= MAX_WALLET_BALANCE, "MTXToken: recipient would exceed maximum wallet balance");
-                }
+            if(checkBlackList){
+                require(!blacklisted[from], "MTXToken: sender is blacklisted");
+                require(!blacklisted[to], "MTXToken: recipient is blacklisted");
             }
 
-            if(!whitelisted[from]){
-
-                if(checkBlackList){
-                    require(!blacklisted[from], "MTXToken: sender is blacklisted");
-                    require(!blacklisted[to], "MTXToken: recipient is blacklisted");
+            if(from != address(0) && to != address(0)){
+                
+                if(!whitelisted[to]){
+                    if (checkMaxWalletBalance) { // Not a mint operation
+                        require(balanceOf(to) + value <= MAX_WALLET_BALANCE, "MTXToken: recipient would exceed maximum wallet balance");
+                    }
                 }
 
+                if(!whitelisted[from]){
 
-                if(checkMaxTransfer){
-                    require(value <= MAX_TRANSFER_AMOUNT, "MTXToken: transfer amount exceeds maximum allowed");
+                    if(checkMaxTransfer){
+                        require(value <= MAX_TRANSFER_AMOUNT, "MTXToken: transfer amount exceeds maximum allowed");
+                    }
+                    
+                    _checkRateLimit(from);                    
                 }
-                
-                // Check rate limits
-                _checkRateLimit(from);
-                
             }
         }
         
